@@ -2,59 +2,24 @@ const feathers = require('@feathersjs/feathers');
 const express  = require('@feathersjs/express');
 const socketio = require('@feathersjs/socketio');
 const moment   = require('moment');
+const knex     = require('knex');
+const service  = require('feathers-knex');
+var cors = require('cors');
 
-let mysql = require('mysql');
-let connection = mysql.createConnection({
-	 host     : 'localhost',
-	 user     : 'root',
-	 password : '',
-	 database : 'attendancesys'
+const PORT = process.env.port || 3030;
+const HOST = '192.168.1.11';
+
+const db = knex({
+  client: 'sqlite3',
+  connection: {
+    filename: './db.sqlite'
+  }
 });
 
 
-// Idea Service
-class IdeaService
-{
-	constructor() {
-		this.prepareData();
-	}
-
-	async prepareData() {
-		connection.query(`SELECT * FROM ideas`,  (error, results, fields) => {
-			if (error) throw error;
-			this.load(results)
-		});
-	}
-
-	load(ideas) {
-		this.ideas = ideas;
-	}
-
-	async find() {
-		await this.prepareData();
-		return this.ideas;
-	}
-
-	async create(data) {
-
-		const idea = {
-			text : data.text,
-			tech : data.tech,
-			viewer : data.viewer
-		}
-
-		connection.query('INSERT INTO ideas SET ?', idea, function (error, results, fields) {
-		  if (error) throw error;
-		});
-
-		this.prepareData();
-		return idea;
-	}
-}
-
 const app = express(feathers())
 
-
+app.use(cors())
 
 // Parse JSON
 app.use(express.json())
@@ -64,28 +29,26 @@ app.configure(socketio(function(io) {
   io.on('connection', function(socket) {
   	socket.on('sample', function (data) {
   		socket.broadcast.emit('sample', {
-	     text : 'A client send some data.'
-	  });
+	       text : data.text,
+	     });
   	});
+
+    socket.on('student-publish', function (data) {
+      socket.broadcast.emit('student-publish', {
+         text : data,
+       });
+    });
+
   });
 }));
 
 // Enable REST Services
 app.configure(express.rest());
 
-// Register Services
-app.use('/ideas', new IdeaService());
-/*app.use('/messages', {
-  create(data, params) {
-    return Promise.resolve(data);
-  }
-});
+app.use('/activities', service({Model: db, name: 'activities'}));
+app.use('/students', service({Model: db, name: 'students'}));
 
-const messages = app.service('messages');
-messages.on('created', (message, context) => {
-
-});
-*/
+app.use(express.errorHandler());
 
 // New connections connect to stream channel
 app.on('connection', conn => app.channel('stream').join(conn));
@@ -93,8 +56,8 @@ app.on('connection', conn => app.channel('stream').join(conn));
 // Publish events to stream
 app.publish(data => app.channel('stream'));
 
-const PORT = process.env.port || 3030;
-app.listen(PORT, '192.168.1.5').on('listening', _ => console.log(`Real time server running on ${PORT}`));
+
+app.listen(PORT, HOST).on('listening', _ => console.log(`Real time server running on ${HOST} port ${PORT}`));
 
 
 

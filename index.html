@@ -85,7 +85,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
     <script>
        // Socket.io setup
-       const socket = io('http://192.168.1.5:3030');
+       const socket = io('http://192.168.1.11:3030');
 
        // Init feathers app
        const app = feathers();
@@ -108,7 +108,8 @@
             viewer : viewer.value
           });
 
-          socket.emit('sample', 'Testing');
+          socket.emit('sample', {text : text.value});
+
 
           text.value   = '';
           tech.value   = '';
