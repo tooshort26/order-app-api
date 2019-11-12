@@ -4,16 +4,16 @@ const socketio = require('@feathersjs/socketio');
 const moment   = require('moment');
 const knex     = require('knex');
 const service  = require('feathers-knex');
-var cors = require('cors');
+const cors = require('cors');
 
 const PORT = process.env.port || 3030;
-const HOST = '192.168.1.11';
 
 const db = knex({
   client: 'sqlite3',
   connection: {
     filename: './db.sqlite'
-  }
+  },
+  useNullAsDefault: true
 });
 
 
@@ -45,8 +45,35 @@ app.configure(socketio(function(io) {
 // Enable REST Services
 app.configure(express.rest());
 
+
 app.use('/activities', service({Model: db, name: 'activities'}));
 app.use('/students', service({Model: db, name: 'students'}));
+app.use('/attendances', {
+  async get(activityId) {
+    return db.select()
+            .table('attendances')
+            .join('activities', 'activities.id', 'attendances.activity_id')
+            .leftJoin('students', 'students.id_number', 'attendances.id_number')
+            .select('students.*');
+  },
+
+  async create(data, params) {
+      db.table('attendances')
+        .insert(data)
+        .then((attendance) => console.log('Succesfully add new attendance.'));
+
+      let attendance = db.select()
+            .table('attendances')
+            .join('activities', 'activities.id', 'attendances.activity_id')
+            .leftJoin('students', 'students.id_number', 'attendances.id_number')
+            .where('students.id_number', data.id_number)
+            .andWhere('attendances.activity_id', data.activity_id)
+            .limit(1)
+            .select();
+      return attendance;
+  }
+}); 
+
 
 app.use(express.errorHandler());
 
@@ -57,7 +84,7 @@ app.on('connection', conn => app.channel('stream').join(conn));
 app.publish(data => app.channel('stream'));
 
 
-app.listen(PORT, HOST).on('listening', _ => console.log(`Real time server running on ${HOST} port ${PORT}`));
+app.listen(PORT).on('listening', _ => console.log(`Real time server running on port ${PORT}`));
 
 
 
