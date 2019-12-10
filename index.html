@@ -85,7 +85,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
     <script>
        // Socket.io setup
-       const socket = io('http://192.168.1.11:3030');
+       const socket = io('http://192.168.1.4:3030');
 
        // Init feathers app
        const app = feathers();
@@ -102,11 +102,11 @@
           const tech   = document.querySelector('#idea-tech');
           const viewer = document.querySelector('#idea-viewer');
 
-          app.service('ideas').create({
-            text : text.value,
-            tech : tech.value,
-            viewer : viewer.value
-          });
+          // app.service('students').create({
+          //   text : text.value,
+          //   tech : tech.value,
+          //   viewer : viewer.value
+          // });
 
           socket.emit('sample', {text : text.value});
 
@@ -120,10 +120,10 @@
           document.querySelector('#ideas').innerHTML += `
             <div class="card bg-secondary my-3">
               <div class="card-body">
-                <p class="lead">${idea.text}
-                   <strong>(${idea.tech})</strong>
+                <p class="lead">${idea.firstname}
+                   <strong>(${idea.middlename})</strong>
                   <br />
-                  <em>${idea.viewer}</em>
+                  <em>${idea.lastname}</em>
                   <br />
                   <small></small>
                 </p>
@@ -134,13 +134,13 @@
 
        async function init() {
           // Find ideas
-          const ideas = await app.service('ideas').find();
+          const ideas = await app.service('students').find();
 
           // Add existing ideas to list
           ideas.forEach(renderIdea);
 
           // Add idea in realtime
-          app.service('ideas').on('created', renderIdea);
+          app.service('students').on('created', renderIdea);
        }
        init();
     </script>
