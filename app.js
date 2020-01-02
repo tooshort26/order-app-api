@@ -35,6 +35,12 @@ const Food = bookshelf.model('Food', {
   tableName : 'foods',
   images() {
       return this.hasMany(FoodImage)
+  },
+  category() {
+      return this.hasOne(Category, 'id', 'category_id')
+  },
+  customers() {
+    return this.belongsToMany('Customer')
   }
 });
 
@@ -47,6 +53,9 @@ const Category = bookshelf.model('Category', {
 
 const Customer = bookshelf.model('Customer', {
   tableName : 'customers',
+  foods() {
+    return this.belongsToMany('Food')
+  }
 });
 
 
@@ -66,10 +75,10 @@ app.use(express.json())
 app.configure(socketio(function(io) {
   io.on('connection', function(socket) {
 
-  	socket.on('sample', function (data) {
-  		socket.broadcast.emit('sample', {
-	       text : data.text,
-	     });
+  	socket.on('submit-order', function (data) {
+      socket.broadcast.emit('new-order', {
+        order : data,
+      });
   	});
 
     socket.on('student-publish', function (data) {
@@ -101,31 +110,39 @@ app.use('/categories', {
   }
 });
 
+
 app.use('/foods', {
   async find(params) {
     if (params.query.category_id) {
-      return new Food().query('where', 'category_id', '=', params.query.category_id)
+      let foods = new Food().query('where', 'category_id', '=', params.query.category_id)
       .fetchAll({
         withRelated : [
           {
+            'category' : function (qb) {
+              qb.column('id', 'name', 'description');
+            },
             'images' : function (qb) {
-              qb.column('food_id', 'image');
+              qb.column('id', 'food_id', 'image');
             }
           }
         ],
-        columns: ['id', 'name', 'description', 'price']
+        columns: ['id', 'name', 'description', 'price', 'category_id']
       });
+      return foods;
+      
     } else {
-        return new Food().fetchAll({
-        withRelated : [
-          {
+        let foods = new Food().fetchAll({
+        withRelated : [   {
+           'category' : function (qb) {
+              qb.column('id', 'name', 'description');
+            },
             'images' : function (qb) {
-              qb.column('food_id', 'image');
+              qb.column('id', 'food_id', 'image');
             }
-          }
-        ],
-        columns: ['*']
+          }],
+          columns: ['id', 'name', 'description', 'price', 'category_id']
       });
+      return foods;
     }
   },
   async get(id) {
@@ -139,18 +156,57 @@ app.use('/foods', {
         price : data.price,
       }, { method : 'insert' });
 
+
       food.then((food) => {
-         new FoodImage().save({
+        data.images.forEach((image) => {
+          new FoodImage().save({
             food_id : food.id,
-            image : data.image,
+            image : image,
           }, { method : 'insert'});
+        });
+         
       });
 
       return food;
   },
   async update(id, params) {
-    return new Food({ id: id })
-        .save(params,{ patch: true });
+    let data = {
+      name : params.name,
+      description  : params.description,
+      price : params.price,
+    };
+
+    if (params.hasOwnProperty('category_id')) {
+      data.category_id = params.category_id;
+    }
+    
+
+    let food = new Food({ id: id })
+        .save(data, { patch: true });
+    if (params.hasOwnProperty('images')) {
+        food.then((food) => {
+            params.images.forEach((image) => {
+              new FoodImage({id : params.food_images_id})
+                  .save({food_id : food.id, image : image});
+            });
+        });  
+    }
+  }
+});
+
+app.use('/carts', {
+  async get(customer_id) {
+    return new Customer({id : customer_id}).fetch({ withRelated : [
+          {
+            'foods' : function (qb) {
+              qb.leftJoin('food_images', 'food_images.food_id', 'foods.id')
+                .select('foods.name', 'foods.description', 'foods.price', 'food_images.image');
+            }
+          }
+        ]});
+  },
+  async create(data) {
+    new Customer({id : data.customer_id}).fetch({withRelated : ['foods']}).then((customer) => customer.foods().attach(data.food_id) );
   }
 });
 
@@ -166,6 +222,22 @@ app.use('/customers', {
   }
 }); 
 
+/*app.use('/carts', {
+  async find(params) {
+    return db.select()
+            .table('customer_cart')
+            .leftJoin('foods', 'foods.id', 'customer_cart.food_id')
+            .leftJoin('food_images', 'food_images.food_id', 'foods.id')
+            .leftJoin('customers', 'customers.id', 'customer_cart.customer_id')
+            .where('customer_cart.customer_id', params.query.customer_id)
+            .select('foods.*', 'customers.firstname', 'customers.middlename', 'customers.lastname', 'customers.address', 'food_images.image')
+            .groupBy('foods.id');
+  },
+  async create(data) {
+    return db('customer_cart').insert(data);
+  },
+}); */
+
 
 
 app.use(express.errorHandler());
@@ -176,7 +248,7 @@ app.post('/customer/login' , (req, res) => {
           if (result) {
             res.json({
                 message : 'Authorized',
-                id : customer.id,
+                id : customer[0].id,
                 code : 200
             });
           } else {
@@ -218,6 +290,29 @@ app.get('/foods/:category_id', (req, res) => {
           res.json(foods);
        });
 });
+
+app.get('/customer/cart/:customer_id', (req, res) => {
+  app.service('carts').get(req.params.customer_id).then((customer) => {
+      return res.json(customer);
+  });
+
+});
+app.post('/customer/cart', (req, res) => {
+  let data = req.body;
+  let orderQuantity = data.quantity;
+  delete data.quantity;
+  for(let iteration = 0; iteration<orderQuantity; iteration++) {
+    app.service('carts').create(data).then((customer) => {
+      if (iteration == (orderQuantity - 1)) {
+        return res.status(200).json({
+          message : 'Succesfully add to cart.',
+          code : 201
+        });  
+      }
+    }).catch(err => console.log(err));  
+  }
+});
+
 
 
 // New connections connect to stream channel
