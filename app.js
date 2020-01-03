@@ -54,9 +54,13 @@ const Category = bookshelf.model('Category', {
 const Customer = bookshelf.model('Customer', {
   tableName : 'customers',
   foods() {
-    return this.belongsToMany('Food')
+    return this.belongsToMany('Food').withPivot(['created_at', 'status']);
   }
 });
+
+const Order = bookshelf.model('Order', {
+  tableName : 'orders'
+})
 
 
 const app = express(feathers())
@@ -200,13 +204,19 @@ app.use('/carts', {
           {
             'foods' : function (qb) {
               qb.leftJoin('food_images', 'food_images.food_id', 'foods.id')
-                .select('foods.name', 'foods.description', 'foods.price', 'food_images.image');
+                .select('foods.id', 'foods.name', 'foods.description', 'food_images.image')
+                .where('_pivot_status', '=', 'in_cart')
+                .groupBy('foods.name')
+                .sum('foods.price as price')
+                .count('foods.name as quantity');
             }
           }
         ]});
   },
   async create(data) {
-    new Customer({id : data.customer_id}).fetch({withRelated : ['foods']}).then((customer) => customer.foods().attach(data.food_id) );
+    data.created_at = moment().format("DD-MM-YYYY hh:mm A");
+    data.status = 'in_cart';
+    new Customer({id : data.customer_id}).fetch({withRelated : ['foods']}).then((customer) => customer.foods().attach(data));
   }
 });
 
@@ -222,23 +232,35 @@ app.use('/customers', {
   }
 }); 
 
-/*app.use('/carts', {
-  async find(params) {
-    return db.select()
-            .table('customer_cart')
-            .leftJoin('foods', 'foods.id', 'customer_cart.food_id')
-            .leftJoin('food_images', 'food_images.food_id', 'foods.id')
-            .leftJoin('customers', 'customers.id', 'customer_cart.customer_id')
-            .where('customer_cart.customer_id', params.query.customer_id)
-            .select('foods.*', 'customers.firstname', 'customers.middlename', 'customers.lastname', 'customers.address', 'food_images.image')
-            .groupBy('foods.id');
-  },
+app.use('/orders', {
   async create(data) {
-    return db('customer_cart').insert(data);
+    let orders = JSON.parse(data.orders);
+    let customer = data.customer_id;
+    let orderType = data.order_type;
+    let orderNo = Math.floor((Math.random() * 10000) + 1).toString()
+
+      orders.forEach((order) => {
+        let foodId = order.id;
+        let quantity = order.quantity;
+
+          new Order().save({
+              order_no : orderNo,
+              customer_id : customer,
+              food_id : foodId,
+              order_type : orderType,
+              created_at : moment().format("DD-MM-YYYY hh:mm A"),
+              quantity : quantity
+          });
+
+          new Food({id : foodId}).fetch({  withRelated: ['customers'] }).then( (result)  => {
+              result.customers().updatePivot({
+              status : 'move_to_order',
+            });
+          });
+      });
+      return orderNo;
   },
-}); */
-
-
+});
 
 app.use(express.errorHandler());
 
@@ -297,6 +319,7 @@ app.get('/customer/cart/:customer_id', (req, res) => {
   });
 
 });
+
 app.post('/customer/cart', (req, res) => {
   let data = req.body;
   let orderQuantity = data.quantity;
@@ -309,9 +332,21 @@ app.post('/customer/cart', (req, res) => {
           code : 201
         });  
       }
-    }).catch(err => console.log(err));  
+    });  
   }
 });
+
+app.post('/customer/order', (req, res) => {
+  let data = req.body;
+  app.service('orders').create(data).then((order) => {
+    // Here Update the cart.
+      return res.status(200).json({
+        message : 'Succesfully place your order.',
+        code : 201
+      });
+  });
+});
+
 
 
 
