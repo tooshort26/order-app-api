@@ -55,11 +55,17 @@ const Customer = bookshelf.model('Customer', {
   tableName : 'customers',
   foods() {
     return this.belongsToMany('Food').withPivot(['created_at', 'status']);
+  },
+  orders() {
+    return this.hasMany('Order');
   }
 });
 
 const Order = bookshelf.model('Order', {
-  tableName : 'orders'
+  tableName : 'orders',
+  food() {
+    return this.hasOne('Food', 'id', 'food_id');
+  }
 })
 
 
@@ -233,11 +239,25 @@ app.use('/customers', {
 }); 
 
 app.use('/orders', {
+  async get(data) {
+     return new Customer({id : data.customer_id}).fetch({columns: ['id', 'firstname', 'lastname', 'phone_number', 'address'], withRelated : [{
+      'orders' : function (qb) {
+        qb.leftJoin('foods', 'foods.id', 'orders.food_id')
+          .select('order_no', 'customer_id', 'food_id', 'order_type' , 'created_at', 'quantity', 'foods.price', 'foods.name')
+          .where('order_no', data.order_no);
+      }
+    }
+    ]});
+  
+  }
+  ,
   async create(data) {
     let orders = JSON.parse(data.orders);
     let customer = data.customer_id;
     let orderType = data.order_type;
-    let orderNo = Math.floor((Math.random() * 10000) + 1).toString()
+    let maxOrderNo = await db('orders').max('order_no as order_no').first();
+    let orderNo = maxOrderNo.order_no == null ? 1 : maxOrderNo.order_no;
+    orderNo++;
 
       orders.forEach((order) => {
         let foodId = order.id;
@@ -338,12 +358,20 @@ app.post('/customer/cart', (req, res) => {
 
 app.post('/customer/order', (req, res) => {
   let data = req.body;
-  app.service('orders').create(data).then((order) => {
+  app.service('orders').create(data).then((orderNo) => {
     // Here Update the cart.
       return res.status(200).json({
-        message : 'Succesfully place your order.',
-        code : 201
+        message : 'Succesfully submit your order.',
+        code : 201,
+        order_no : orderNo
       });
+  });
+});
+
+app.get('/customer/receipt/:customer_id/:order_no', (req, res) => {
+  let data = req.params;
+  app.service('orders').get(data).then((receiptInformation) => {
+      return res.status(200).json(receiptInformation);
   });
 });
 
