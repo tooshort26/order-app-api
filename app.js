@@ -1,4 +1,3 @@
-const PORT = process.env.port || 3030;
 const feathers = require('@feathersjs/feathers');
 const express  = require('@feathersjs/express');
 const socketio = require('@feathersjs/socketio');
@@ -407,7 +406,7 @@ app.publish(data => app.channel('stream'));
 
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
-app.listen().on('listening', _ => console.log(`app start running.`));
+app.listen(process.env.PORT || 5000).on('listening', _ => console.log(`app start running.`));
 
 
 
