@@ -30,6 +30,13 @@ const FoodImage = bookshelf.model('FoodImage', {
   tableName : 'food_images',
 });
 
+const FoodOrder = bookshelf.model('FoodOrder', {
+  tableName : 'food_orders',
+  order_food () {
+      return this.hasMany('Food', 'id', 'food_id');
+  }
+});
+
 
 const Food = bookshelf.model('Food', {
   tableName : 'foods',
@@ -57,14 +64,17 @@ const Customer = bookshelf.model('Customer', {
     return this.belongsToMany('Food').withPivot(['created_at', 'status']);
   },
   orders() {
-    return this.hasMany('Order');
+    return this.hasOne('Order');
   }
 });
 
 const Order = bookshelf.model('Order', {
   tableName : 'orders',
-  food() {
-    return this.hasOne('Food', 'id', 'food_id');
+  foods() {
+    return this.hasMany('FoodOrder', 'order_order_no', 'order_no');
+  },
+  customer () {
+    return this.hasOne('Customer', 'id', 'customer_id');
   }
 })
 
@@ -239,16 +249,17 @@ app.use('/customers', {
 }); 
 
 app.use('/orders', {
+  async find() {
+    return new Order().fetchAll({withRelated : ['customer','foods', 'foods.order_food']});
+  }
+  ,
   async get(data) {
-     return new Customer({id : data.customer_id}).fetch({columns: ['id', 'firstname', 'lastname', 'phone_number', 'address'], withRelated : [{
-      'orders' : function (qb) {
-        qb.leftJoin('foods', 'foods.id', 'orders.food_id')
-          .select('order_no', 'customer_id', 'food_id', 'order_type' , 'created_at', 'quantity', 'foods.price', 'foods.name')
-          .where('order_no', data.order_no);
-      }
-    }
-    ]});
-  
+     return new Order().where('order_no', data.order_no).fetch({withRelated : [
+      { 'customer' : function (qb) {
+          qb.select('id', 'firstname', 'lastname', 'email', 'phone_number', 'address')
+            .where('id', data.customer_id);
+        }
+      },'foods', 'foods.order_food']});
   }
   ,
   async create(data) {
@@ -259,25 +270,29 @@ app.use('/orders', {
     let orderNo = maxOrderNo.order_no == null ? 1 : maxOrderNo.order_no;
     orderNo++;
 
+
+      new Order().save({
+              order_no : orderNo,
+              customer_id : customer,
+              order_type : orderType,
+              created_at : moment().format("DD-MM-YYYY hh:mm A"),
+          });
+
       orders.forEach((order) => {
         let foodId = order.id;
         let quantity = order.quantity;
-
-          new Order().save({
-              order_no : orderNo,
-              customer_id : customer,
+          new FoodOrder().save({
+              order_order_no : orderNo,
               food_id : foodId,
-              order_type : orderType,
-              created_at : moment().format("DD-MM-YYYY hh:mm A"),
               quantity : quantity
           });
 
-          new Food({id : foodId}).fetch({  withRelated: ['customers'] }).then( (result)  => {
+          new Food({id : foodId}).fetch({  withRelated: ['customers'] }).then( (result) => {
               result.customers().updatePivot({
               status : 'move_to_order',
             });
           });
-      });
+     });
       return orderNo;
   },
 });
