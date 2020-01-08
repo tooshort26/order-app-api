@@ -250,7 +250,8 @@ app.use('/customers', {
 
 app.use('/orders', {
   async find() {
-    return new Order().fetchAll({withRelated : ['customer','foods', 'foods.order_food']});
+    let today = moment().format('DD-MM-YYYY');
+    return new Order().fetchAll({withRelated : ['customer','foods', 'foods.order_food']}).where('created_at', 'like', today + '%');
   }
   ,
   async get(data) {
