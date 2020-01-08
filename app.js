@@ -407,7 +407,7 @@ app.publish(data => app.channel('stream'));
 
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
-app.listen().on('listening', _ => console.log(`Real time server running on ${IP} port ${PORT}`));
+app.listen().on('listening', _ => console.log(`app start running.`));
 
 
 
