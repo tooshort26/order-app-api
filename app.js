@@ -245,6 +245,9 @@ app.use('/customers', {
       let customer = db.table('customers')
         .insert(data);
       return customer;
+  },
+  async update(id,params) {
+    return new Customer({id : id}).save(params,{ patch: true });
   }
 }); 
 
@@ -324,6 +327,15 @@ app.post('/customer/login' , (req, res) => {
   }).catch((err) => res.json({message : 'Invalid Email/Password', code : 401 }));
 });
 
+app.post('/customer/update/profile', (req,res) => {
+  app.service('customers').update(req.body.id, req.body).then((customer) => {
+    return res.json({
+        message : 'Succesfully update user profile',
+        id : customer.id
+     });
+  });
+});
+
 app.post('/customer/register', (req, res) => {
   bcrypt.genSalt(saltRounds, function(err, salt) {
     bcrypt.hash(req.body.password, salt, function(err, hash) {
@@ -358,7 +370,6 @@ app.get('/customer/cart/:customer_id', (req, res) => {
   app.service('carts').get(req.params.customer_id).then((customer) => {
       return res.json(customer);
   });
-
 });
 
 app.post('/customer/cart', (req, res) => {
@@ -407,7 +418,8 @@ app.publish(data => app.channel('stream'));
 
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
-app.listen(process.env.PORT || 5000).on('listening', _ => console.log(`app start running.`));
+// app.listen(process.env.PORT || 5000, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
+app.listen().on('listening', _ => console.log(`app start running.`));
 
 
 
