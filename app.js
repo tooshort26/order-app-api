@@ -419,7 +419,7 @@ app.publish(data => app.channel('stream'));
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
 // app.listen(process.env.PORT || 5000, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
-app.listen().on('listening', _ => console.log(`app start running.`));
+app.listen(process.env.PORT || 5000).on('listening', _ => console.log(`app start running.`));
 
 
 
