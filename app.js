@@ -114,6 +114,7 @@ app.configure(socketio(function(io) {
 // Enable REST Services
 app.configure(express.rest());
 
+
 app.use('/categories', {
   async find(data) {
     return new Category().fetchAll({withRelated : ['foods', 'foods.images']});
@@ -298,6 +299,11 @@ app.use('/orders', {
 });
 
 app.use(express.errorHandler());
+
+app.get('/', (req, res) => {
+  res.end('');
+});
+
 
 app.post('/customer/login' , (req, res) => {
   app.service('customers').get(req.body.email).then((customer) => {
