@@ -233,13 +233,21 @@ app.use('/carts', {
     data.created_at = moment().format("DD-MM-YYYY hh:mm A");
     data.status = 'in_cart';
     new Customer({id : data.customer_id}).fetch({withRelated : ['foods']}).then((customer) => customer.foods().attach(data));
-  }
+  },
+  async remove(data) {
+  	return new Customer({id : data.customer_id}).fetch({withRelated : ['foods']})
+  				.then((customer) => customer.foods().where('food_id', data.food_id).detach(data));
+  },
 });
 
 
 app.use('/customers', {
-  async get(email) {
-    return db.table('customers').where('email', email).select('*');
+  async get(data) {
+  	if(isNaN(parseInt(data))) { // The user want to fetch not using the customer id.
+  		return db.table('customers').where('email', data).select('*');
+  	}  else {
+  		return new Customer({id : data}).fetch({columns : ['id', 'firstname', 'lastname', 'email', 'phone_number', 'address']});
+  	}
   },
   async create(data, params) {
       let customer = db.table('customers')
@@ -253,8 +261,8 @@ app.use('/customers', {
 
 app.use('/orders', {
   async find() {
-    let today = moment().format('DD-MM-YYYY hh:mm A');
-    return new Order().query('where', 'created_at', 'LIKE', today + "%").fetchAll({withRelated : ['customer','foods', 'foods.order_food']});
+    let today = moment().format('DD-MM-YYYY');
+    return new Order().query('where', 'created_at', 'LIKE', today + "%").query('where', 'status','=', 'incoming').fetchAll({withRelated : ['customer','foods', 'foods.order_food']});
   }
   ,
   async get(data) {
@@ -279,6 +287,7 @@ app.use('/orders', {
               order_no : orderNo,
               customer_id : customer,
               order_type : orderType,
+              status : 'incoming',
               created_at : moment().format("DD-MM-YYYY hh:mm A"),
           });
 
@@ -291,13 +300,14 @@ app.use('/orders', {
               quantity : quantity
           });
 
-          new Food({id : foodId}).fetch({  withRelated: ['customers'] }).then( (result) => {
-              result.customers().updatePivot({
-              status : 'move_to_order',
-            });
-          });
+          new Food({id : foodId}).fetch({  withRelated: ['customers'] });
      });
       return orderNo;
+  },
+  async update(order_no, data) {
+    return new Order().where('order_no', '=', order_no)
+                .where('customer_id', '=', data.customer_id)
+                .save({ status : data.status }, { patch : true});
   },
 });
 
@@ -315,6 +325,8 @@ app.post('/customer/login' , (req, res) => {
             res.json({
                 message : 'Authorized',
                 id : customer[0].id,
+                firstname : customer[0].firstname,
+                lastname : customer[0].lastname,
                 code : 200
             });
           } else {
@@ -388,6 +400,16 @@ app.post('/customer/cart', (req, res) => {
   }
 });
 
+app.post('/customer/cart/remove/item', (req, res) => {
+	let data = req.body;
+	app.service('carts').remove(data).then((cart) => {
+		return res.status(200).json({
+	        message : 'Succesfully remove the item.',
+	        code : 200
+      });
+	});
+});
+
 app.post('/customer/order', (req, res) => {
   let data = req.body;
   app.service('orders').create(data).then((orderNo) => {
@@ -399,6 +421,47 @@ app.post('/customer/order', (req, res) => {
       });
   });
 });
+
+app.get('/prepare/order', (req, res) => {
+   let today = moment().format('DD-MM-YYYY');
+   return new Order().query('where', 'created_at', 'LIKE', today + "%")
+                     .query('where', 'status','=', 'prepare')
+                     .fetchAll({withRelated : ['customer','foods', 'foods.order_food']}).then((orders) => {
+                        return res.status(200).json(orders);
+                     });
+});
+
+app.get('/cancelled/order', (req, res) => {
+   let today = moment().format('DD-MM-YYYY');
+   return new Order().query('where', 'created_at', 'LIKE', today + "%")
+                     .query('where', 'status','=', 'cancelled')
+                     .fetchAll({withRelated : ['customer','foods', 'foods.order_food']}).then((orders) => {
+                        return res.status(200).json(orders);
+                     });
+});
+
+app.get('/customer/orders/:customer_id', (req, res) => {
+  let data = req.params;
+  let today = moment().format('DD-MM-YYYY');
+  return new Order().query('where', 'created_at', 'LIKE' , today + "%")
+            .query('where', 'status', '=', 'incoming')
+            .fetchAll({withRelated : ['foods', 'foods.order_food']})
+            .then((orders) => {
+                return res.status(200).json(orders);
+            });
+});
+
+app.post('/customer/cancel/order/', (req, res) => {
+  let data = req.body;
+  return app.service('orders').update(data.order_no, data).then((order) => {
+    return res.status(200).json({
+        order,
+        message : 'Succesfully cancel your order',
+        code : 200
+    })  
+  });
+});
+
 
 app.get('/customer/receipt/:customer_id/:order_no', (req, res) => {
   let data = req.params;
@@ -419,7 +482,7 @@ app.publish(data => app.channel('stream'));
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
 // app.listen(process.env.PORT || 5000, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
-app.listen(process.env.PORT || 5000).on('listening', _ => console.log(`app start running.`));
+app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
 
 
 
