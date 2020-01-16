@@ -116,7 +116,8 @@ app.configure(express.rest());
 
 app.use('/categories', {
   async find(data) {
-    return new Category().fetchAll({withRelated : ['foods', 'foods.images']});
+    return new Category().query('where', 'status', '=', 'active')
+                        .fetchAll({withRelated : ['foods', 'foods.images']});
   },
   async get(id) {
     return new Category({id:id}).fetch({withRelated : ['foods', 'foods.images']})
@@ -125,8 +126,14 @@ app.use('/categories', {
       return new Category().save(data, { method : 'insert'});
   },
   async update(id, params) {
-    return new Category({ id: id })
-        .save(params,{ patch: true });
+    if (params.hasOwnProperty('status')) {
+        return new Category({ id: id })
+              .save(params,{ patch: true });
+    } else {
+        return new Category({ id: id })
+        .save(params,{ patch: true });  
+    }
+    
   }
 });
 
@@ -160,7 +167,7 @@ app.use('/foods', {
               qb.column('id', 'food_id', 'image');
             }
           }],
-          columns: ['id', 'name', 'description', 'price', 'category_id']
+          columns: ['id', 'name', 'description', 'price', 'category_id', 'status']
       });
       return foods;
     }
@@ -194,6 +201,7 @@ app.use('/foods', {
       name : params.name,
       description  : params.description,
       price : params.price,
+      status : params.status,
     };
 
     if (params.hasOwnProperty('category_id')) {
@@ -233,6 +241,14 @@ app.use('/carts', {
     data.created_at = moment().format("DD-MM-YYYY hh:mm A");
     data.status = 'in_cart';
     new Customer({id : data.customer_id}).fetch({withRelated : ['foods']}).then((customer) => customer.foods().attach(data));
+  },
+  async update(id, data) {
+    let orderQuantity = data.quantity;
+    delete data.quantity;
+    await this.remove(data);
+    for(let i = 0; i<orderQuantity; i++) {
+      this.create(data);
+    }
   },
   async remove(data) {
   	return new Customer({id : data.customer_id}).fetch({withRelated : ['foods']})
@@ -410,6 +426,16 @@ app.post('/customer/cart/remove/item', (req, res) => {
 	});
 });
 
+app.post('/customer/cart/edit/item', (req, res) => {
+  let data = req.body;
+  app.service('carts').update(data.customer_id, data).then((cart) => {
+  return  res.status(200).json({
+        message : 'Succesfully update the item.',
+          code : 200
+    });
+  });
+});
+
 app.post('/customer/order', (req, res) => {
   let data = req.body;
   app.service('orders').create(data).then((orderNo) => {
@@ -431,6 +457,24 @@ app.get('/prepare/order', (req, res) => {
                      });
 });
 
+app.get('/deliver/pickup/order', (req, res) => {
+   let today = moment().format('DD-MM-YYYY');
+   return new Order().query('where', 'created_at', 'LIKE', today + "%")
+                     .query('where', 'status','=', 'deliver/pickup')
+                     .fetchAll({withRelated : ['customer','foods', 'foods.order_food']}).then((orders) => {
+                        return res.status(200).json(orders);
+                     });
+});
+
+app.get('/paid/order', (req, res) => {
+   let today = moment().format('DD-MM-YYYY');
+   return new Order().query('where', 'created_at', 'LIKE', today + "%")
+                     .query('where', 'status','=', 'paid')
+                     .fetchAll({withRelated : ['customer','foods', 'foods.order_food']}).then((orders) => {
+                        return res.status(200).json(orders);
+                     });
+});
+
 app.get('/cancelled/order', (req, res) => {
    let today = moment().format('DD-MM-YYYY');
    return new Order().query('where', 'created_at', 'LIKE', today + "%")
@@ -444,7 +488,7 @@ app.get('/customer/orders/:customer_id', (req, res) => {
   let data = req.params;
   let today = moment().format('DD-MM-YYYY');
   return new Order().query('where', 'created_at', 'LIKE' , today + "%")
-            .query('where', 'status', '=', 'incoming')
+            .query('where', 'status', '!=', 'cancelled')
             .fetchAll({withRelated : ['foods', 'foods.order_food']})
             .then((orders) => {
                 return res.status(200).json(orders);
@@ -481,8 +525,10 @@ app.publish(data => app.channel('stream'));
 
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
-// app.listen(process.env.PORT || 5000, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
-app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
+// For development
+app.listen(process.env.PORT || 3030, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
+// For production
+// app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
 
 
 
