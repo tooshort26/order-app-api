@@ -484,6 +484,18 @@ app.get('/cancelled/order', (req, res) => {
                      });
 });
 
+app.get('/sales/foods', (req, res) => {
+  return new Food().fetchAll({columns : ['name']}).then((foods) => res.status(200).json(foods));
+}); 
+
+app.get('/daily/sales', (req, res) => {
+  let today = moment().format('DD-MM-YYYY');
+   return new Order().query('where', 'status','=', 'paid')
+                     .fetchAll({columns : ['id', 'order_no','customer_id', 'order_type', 'created_at'], withRelated : ['foods', 'foods.order_food'] }).then((orders) => {
+                        return res.status(200).json(orders);
+       });
+});
+
 app.get('/customer/orders/:customer_id', (req, res) => {
   let data = req.params;
   let today = moment().format('DD-MM-YYYY');
@@ -517,6 +529,7 @@ app.get('/customer/receipt/:customer_id/:order_no', (req, res) => {
 
 
 
+
 // New connections connect to stream channel
 app.on('connection', conn => app.channel('stream').join(conn));
 
@@ -526,7 +539,7 @@ app.publish(data => app.channel('stream'));
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
 // For development
-app.listen(process.env.PORT || 3030, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
+app.listen(process.env.PORT || 3030, '192.168.1.2').on('listening', _ => console.log(`app start running.`));
 // For production
 // app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
 
