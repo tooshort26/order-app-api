@@ -539,9 +539,9 @@ app.publish(data => app.channel('stream'));
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
 // For development
-app.listen(process.env.PORT || 3030, '192.168.1.2').on('listening', _ => console.log(`app start running.`));
+// app.listen(process.env.PORT || 3030, '192.168.1.2').on('listening', _ => console.log(`app start running.`));
 // For production
-// app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
+app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
 
 
 
