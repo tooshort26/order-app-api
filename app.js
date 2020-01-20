@@ -93,16 +93,17 @@ app.use(express.json())
 // Config Socket.io realtime APIs
 app.configure(socketio(function(io) {
   io.on('connection', function(socket) {
-
+/*
   	socket.on('submit-order', function (data) {
       socket.broadcast.emit('new-order', {
         order : data,
       });
   	});
+*/
 
-    socket.on('student-publish', function (data) {
-      socket.broadcast.emit('student-publish', {
-         text : data,
+  socket.on('order-ready', function (data) {
+      socket.broadcast.emit(`customer_notify_${data.customer_id}`, {
+         text : `Your order is now ready to ${data.order_type}`
        });
     });
 
