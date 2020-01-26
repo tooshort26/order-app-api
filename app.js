@@ -124,6 +124,7 @@ app.use('/categories', {
     return new Category({id:id}).fetch({withRelated : ['foods', 'foods.images']})
   },
   async create(data) {
+  	  data.status = 'active';
       return new Category().save(data, { method : 'insert'});
   },
   async update(id, params) {
@@ -159,7 +160,7 @@ app.use('/foods', {
       return foods;
       
     } else {
-        let foods = new Food().fetchAll({
+        let foods = new Food().query('where', 'status','!=', 'remove').fetchAll({
         withRelated : [   {
            'category' : function (qb) {
               qb.column('id', 'name', 'description');
@@ -182,6 +183,7 @@ app.use('/foods', {
         description : data.description,
         category_id : data.category_id,
         price : data.price,
+        status : 'available',
       }, { method : 'insert' });
 
 
@@ -220,6 +222,7 @@ app.use('/foods', {
             });
         });  
     }
+    return food;
   }
 });
 
@@ -540,7 +543,7 @@ app.publish(data => app.channel('stream'));
 // let IP = ifaces['Wireless Network Connection'][1].address;
 // PORT, IP
 // For development
-// app.listen(process.env.PORT || 3030, '192.168.1.2').on('listening', _ => console.log(`app start running.`));
+// app.listen(process.env.PORT || 3030, '192.168.1.4').on('listening', _ => console.log(`app start running.`));
 // For production
 app.listen(process.env.PORT || 3030).on('listening', _ => console.log(`app start running.`));
 
