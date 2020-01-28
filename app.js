@@ -320,6 +320,8 @@ app.use('/orders', {
               quantity : quantity
           });
 
+          app.service('carts').remove({customer_id : customer, food_id : foodId});
+
           new Food({id : foodId}).fetch({  withRelated: ['customers'] });
      });
       return orderNo;
